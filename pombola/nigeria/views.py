@@ -155,7 +155,7 @@ class NGSearchView(SearchBaseView):
         forgiving in case of input error.
         """
 
-        return requests.get('https://pu-lookup.herokuapp.com/lookup/{}'.format(pun)).json()
+        return requests.get('https://pu-lookup.herokuapp.com/', params={'lookup': pun}).json()
 
     def get_state(self, matched_pun, state_code, area):
         if ":" in matched_pun:

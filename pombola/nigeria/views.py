@@ -4,6 +4,8 @@ import requests
 
 from mapit.models import Area
 
+from django.conf import settings
+
 from pombola.core.models import Place
 from pombola.core.views import HomeView
 from pombola.info.models import InfoPage
@@ -155,7 +157,7 @@ class NGSearchView(SearchBaseView):
         forgiving in case of input error.
         """
 
-        return requests.get('https://pu-lookup.herokuapp.com/', params={'lookup': pun}).json()
+        return requests.get(settings.PU_SEARCH_API_URL, params={'lookup': pun}).json()
 
     def get_state(self, matched_pun, state_code, area):
         if ":" in matched_pun:

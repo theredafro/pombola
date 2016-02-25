@@ -14,6 +14,8 @@ MAP_BOUNDING_BOX_WEST = 2.5
 
 MAPIT_COUNTRY = 'NG'
 
+PU_SEARCH_API_URL = 'https://pu-lookup.herokuapp.com'
+
 COUNTRY_CSS = {
     'nigeria': {
         'source_filenames': (

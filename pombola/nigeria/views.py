@@ -1,7 +1,6 @@
 import re
 
 import requests
-
 from mapit.models import Area
 
 from django.conf import settings
@@ -44,14 +43,18 @@ class NGSearchView(SearchBaseView):
     def get_context_data(self, **kwargs):
         context = super(NGSearchView, self).get_context_data(**kwargs)
 
-        if self.pun is None:
+        query = self.request.GET.get('q')
+        area_lookup = requests.get(settings.PU_SEARCH_API_URL, params={'lookup': query})
+        if area_lookup.status_code is not 200:
+            self.pun = False
             return context
 
+        self.pun = True
+
         # So now we know that the query is a PUN:
-        query = self.request.GET.get('q')
         context['raw_query'] = query
         context['query'] = query
-        context['area'] = self.get_area_from_pun(query)
+        context['area'] = area_lookup.json()
 
         # If area found find places of interest
         if context['area']:
@@ -88,14 +91,6 @@ class NGSearchView(SearchBaseView):
             #         "senator"
             #     )
         return context
-
-    def parse_params(self):
-        super(NGSearchView, self).parse_params()
-        self.pun = self.query
-
-    def get(self, request, *args, **kwargs):
-        query = self.request.GET.get('q')
-        return super(NGSearchView, self).get(request, *args, **kwargs)
 
     def find_matching_places(self, code, polygons):
         """Find MapIt areas of 'code' type that overlap with 'polygons'
@@ -149,13 +144,7 @@ class NGSearchView(SearchBaseView):
             return None
 
     def get_area_from_pun(self, pun):
-        """Find MapIt area that matches the PUN.
-
-        If not found trim off components from the end until match
-        or no more searches possible.
-        Need this as we don't have the polling stations and want to be
-        forgiving in case of input error.
-        """
+        """Find MapIt area that matches the PUN."""
 
         return requests.get(settings.PU_SEARCH_API_URL, params={'lookup': pun}).json()
 

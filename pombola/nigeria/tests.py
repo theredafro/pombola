@@ -164,13 +164,13 @@ class NGSearchViewTest(WebTest):
     def test_matching_state(self):
         response = self.app.get("/search/?q=28/04454/09")
         self.assertIn(
-            'Best match is the state "ONDO" with poll unit number \'ON\'',
+            'Best match is the state "Ondo" with poll unit number \'ON\'',
             response.content
         )
 
     def test_matching_lga(self):
         response = self.app.get("/search/?q=28/04/09")
         self.assertIn(
-            'Best match is the local government area "AKOKO SOUTH WEST" with poll unit number \'ON:4\'',
+            'Best match is the local government area "Akoko South-West" with poll unit number \'ON:4\'',
             response.content
         )

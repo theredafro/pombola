@@ -1,5 +1,4 @@
 import requests
-from mapit.models import Area
 
 from django.conf import settings
 
@@ -91,42 +90,6 @@ class NGSearchView(SearchBaseView):
 
         return context
 
-    def find_matching_places(self, code, polygons):
-        """Find MapIt areas of 'code' type that overlap with 'polygons'
-
-        Return every MapIt area of the specifiedE type such that at
-        least 50% of polygons (a MultiPolygon) overlaps it; if there
-        are no such areas, just return the 5 MapIt areas of the right
-        type with the largest overlap
-        """
-
-        all_areas = Area.objects.filter(type__code=code, polygons__polygon__intersects=polygons).distinct()
-
-        area_of_original = polygons.area
-
-        size_of_overlap = {}
-
-        # calculate the overlap
-        for area in all_areas:
-            area_polygons = area.polygons.collect()
-            intersection = polygons.intersection(area_polygons)
-
-            size_of_overlap[area] = intersection.area / area_of_original
-
-        # Sort the results by the overlap size; largest overlap first
-        all_areas = sorted(all_areas,
-                           reverse=True,
-                           key=lambda a: size_of_overlap[a])
-
-        # get the most overlapping ones
-        likely_areas = [a for a in all_areas if size_of_overlap[a] > 0.5]
-
-        # If there are none display first five (better than nothing...)
-        if not likely_areas:
-            likely_areas = all_areas[:5]
-
-        return self.convert_areas_to_places(likely_areas)
-
     def convert_areas_to_places(self, areas):
         places = []
         for area in areas:
@@ -156,12 +119,6 @@ class NGSearchView(SearchBaseView):
             governor = self.get_people(state, "executive-governor")
             if governor:
                 return governor[0][0]
-
-    def find_containing_area(self, area):
-        area_for_polygons = area
-        while area_for_polygons and not area_for_polygons.polygons.exists():
-            area_for_polygons = area_for_polygons.parent_area
-        return area_for_polygons
 
     def get_district_data(self, districts, role):
         district_list = []

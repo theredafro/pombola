@@ -1,5 +1,3 @@
-import re
-
 import requests
 from mapit.models import Area
 
@@ -43,18 +41,21 @@ class NGSearchView(SearchBaseView):
     def get_context_data(self, **kwargs):
         context = super(NGSearchView, self).get_context_data(**kwargs)
 
+        # Assume we're dealing with a PUN until it's been proved otherwise.
+        self.pun = True
+
         query = self.request.GET.get('q')
-        area_lookup = requests.get(settings.PU_SEARCH_API_URL, params={'lookup': query})
-        if area_lookup.status_code is not 200:
+        response = requests.get(settings.PU_SEARCH_API_URL, params={'lookup': query})
+        if response.status_code is not 200:
             self.pun = False
             return context
 
-        self.pun = True
+        pu_result = response.json()
 
         # So now we know that the query is a PUN:
         context['raw_query'] = query
         context['query'] = query
-        context['area'] = area_lookup.json()
+        context['area'] = pu_result['area']
 
         # If area found find places of interest
         if context['area']:
@@ -68,7 +69,8 @@ class NGSearchView(SearchBaseView):
             context['state'] = self.get_state(
                 context['area_pun_code'],
                 query[0:2],
-                area)
+                area,
+                pu_result)
 
             # work out what level of the PUN we've matched
             context['area_pun_type'] = area['type_name']
@@ -77,19 +79,16 @@ class NGSearchView(SearchBaseView):
             context['governor'] = self.find_governor(context['state'])
 
             # work out the polygons to match to, may need to go up tree to parents.
-            # area_for_polygons = self.find_containing_area(area)
-            # if area_for_polygons:
-            #     area_polygons = area_for_polygons.polygons.collect()
+            context['federal_constituencies'] = self.get_district_data(
+                self.convert_areas_to_places(pu_result['federal_constituencies']),
+                "representative"
+            )
 
-            #     context['federal_constituencies'] = self.get_district_data(
-            #         self.find_matching_places("FED", area_polygons),
-            #         "representative"
-            #     )
+            context['senatorial_districts'] = self.get_district_data(
+                self.convert_areas_to_places(pu_result['senatorial_districts']),
+                "senator"
+            )
 
-            #     context['senatorial_districts']  = self.get_district_data(
-            #         self.find_matching_places("SEN", area_polygons),
-            #         "senator"
-            #     )
         return context
 
     def find_matching_places(self, code, polygons):
@@ -143,15 +142,10 @@ class NGSearchView(SearchBaseView):
         except Place.DoesNotExist:
             return None
 
-    def get_area_from_pun(self, pun):
-        """Find MapIt area that matches the PUN."""
-
-        return requests.get(settings.PU_SEARCH_API_URL, params={'lookup': pun}).json()
-
-    def get_state(self, matched_pun, state_code, area):
+    def get_state(self, matched_pun, state_code, area, pu_result):
         if ":" in matched_pun:
             # look up state
-            state_area = self.get_area_from_pun(state_code)
+            state_area = pu_result['states'][0]
         else:
             # matched area is the state, convert it to place data
             state_area = area

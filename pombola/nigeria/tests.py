@@ -5,8 +5,10 @@ from . import views
 
 from django.test import TestCase
 from django_webtest import WebTest
+from django.conf import settings
 
 from nose.plugins.attrib import attr
+import requests_mock
 
 from mapit.models import Area, CodeType, NameType, Type
 from pombola.core.models import (
@@ -47,130 +49,59 @@ class InfoBlogListTest(TestCase):
         self.assertNotIn('&lt;p&gt;', response.content)
 
 
+@requests_mock.mock()
 @attr(country='nigeria')
 class NGSearchViewTest(WebTest):
-
-    def setUp(self):
-        self.poll_unit_code_type = CodeType.objects.create(
-            code='poll_unit',
-            description='Polling Unit Number',
-            )
-
-        self.poll_unit_name_type = NameType.objects.create(
-            code='poll_unit',
-            description='Polling Unit Number names',
-            )
-
-        self.state_type = Type.objects.create(
-            code='STA',
-            description='State',
-            )
-
-        self.mapit_test_state = Area.objects.create(
-            name="Ondo",
-            type=self.state_type,
-            )
-
-        self.mapit_test_state.codes.get_or_create(
-            type=self.poll_unit_code_type,
-            code="ON",
-         )
-
-        self.mapit_test_state.names.get_or_create(
-            type=self.poll_unit_name_type,
-            name="ONDO"
-        )
-
-        self.place_kind = PlaceKind.objects.create(
-            slug='pk_test', name='PK Test')
-
-        self.place_state = Place.objects.create(
-            kind=self.place_kind,
-            slug="place_test",
-            name="Test State Name",
-            mapit_area=self.mapit_test_state
-        )
-
-        self.governor = Person.objects.create(
-            slug="governor_test",
-            legal_name="Test Gov",
-        )
-
-        self.gov_title = PositionTitle.objects.create(
-            slug="governor"
-        )
-
-        self.position = Position.objects.create(
-            title=self.gov_title,
-            place=self.place_state,
-            person=self.governor
-        )
-
-        self.lga_type = Type.objects.create(
-            code='LGA',
-            description='LGA',
-            )
-
-        self.mapit_test_lga = Area.objects.create(
-            name="Akoko South West",
-            type=self.lga_type,
-            )
-
-        self.mapit_test_lga.codes.get_or_create(
-            type=self.poll_unit_code_type,
-            code="ON:4",
-         )
-
-        self.mapit_test_lga.names.get_or_create(
-            type=self.poll_unit_name_type,
-            name="AKOKO SOUTH WEST"
-        )
-
-        self.ward_type = Type.objects.create(
-            code='WRD',
-            description='Ward',
-            )
-
-        self.mapit_test_ward = Area.objects.create(
-            name="Test Ward",
-            type=self.ward_type,
-            parent_area = self.mapit_test_lga,
-            )
-
-        self.mapit_test_ward.codes.get_or_create(
-            type=self.poll_unit_code_type,
-            code="ON:4:7",
-         )
-
-        self.mapit_test_ward.names.get_or_create(
-            type=self.poll_unit_name_type,
-            name="Test Ward"
-        )
-
-    def test_four_part_pun_is_recognised(self):
+    def test_four_part_pun_is_recognised(self, m):
+        m.get(settings.PU_SEARCH_API_URL, status_code=404)
         response = self.app.get("/search/?q=01:02:03:04")
-        self.assertIn(
-            'No results were found for the poll unit number AB:2:3:4',
-            response.content
+        self.assertContains(
+            response,
+            'No results were found for the poll unit number 01:02:03:04'
         )
 
-    def test_slash_formatted_pun_is_recognised(self):
+    def test_slash_formatted_pun_is_recognised(self, m):
+        m.get(settings.PU_SEARCH_API_URL, status_code=404)
         response = self.app.get("/search/?q=01/02/03/04")
-        self.assertIn(
-            'No results were found for the poll unit number AB:2:3:4',
-            response.content
+        self.assertContains(
+            response,
+            'No results were found for the poll unit number 01/02/03/04'
         )
 
-    def test_matching_state(self):
+    def test_matching_state(self, m):
+        m.get(settings.PU_SEARCH_API_URL, json={
+            'area': {
+                'codes': {
+                    'poll_unit': 'ON'
+                },
+                'id': 30,
+                'name': 'Ondo',
+                'type_name': 'State',
+            },
+            'federal_constituencies': [],
+            'senatorial_districts': [],
+            'states': []})
         response = self.app.get("/search/?q=28/04454/09")
-        self.assertIn(
-            'Best match is the state "Ondo" with poll unit number \'ON\'',
-            response.content
+        self.assertContains(
+            response,
+            'Best match is the State "Ondo" with poll unit number \'ON\''
         )
 
-    def test_matching_lga(self):
+    def test_matching_lga(self, m):
+        m.get(settings.PU_SEARCH_API_URL, json={
+            'area': {
+                'codes': {
+                    'poll_unit': 'ON:4'
+                },
+                'id': 66,
+                'name': 'Akoko South-West',
+                'type_name': 'Local Government Area',
+            },
+            'federal_constituencies': [],
+            'senatorial_districts': [],
+            'states': [{'id': 42}]})
         response = self.app.get("/search/?q=28/04/09")
-        self.assertIn(
-            'Best match is the local government area "Akoko South-West" with poll unit number \'ON:4\'',
-            response.content
+        self.assertContains(
+            response,
+            'Best match is the Local Government Area "Akoko South-West" with poll unit number \'ON:4\''
         )

@@ -45,8 +45,11 @@ class NGSearchView(SearchBaseView):
 
         query = self.request.GET.get('q')
         response = requests.get(settings.PU_SEARCH_API_URL, params={'lookup': query})
-        if response.status_code is not 200:
+        if response.status_code == 400:
             self.pun = False
+            return context
+
+        if response.status_code == 404:
             return context
 
         pu_result = response.json()

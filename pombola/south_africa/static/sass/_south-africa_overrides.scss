@@ -3,14 +3,6 @@ $high_dpi_screen: '-webkit-min-device-pixel-ratio: 1.5), (min-resolution: 144dpi
 
 @import "base_fonts";
 
-@mixin unstyled-list {
-    padding-left: 0;
-    margin-bottom: 0;
-    li {
-        list-style: none outside none;
-    }
-}
-
 #staging_header {
     background-color: $colour_blackish;
     color: #ccc;
@@ -97,6 +89,7 @@ a {
 .inline-search-box {
     input {
         border-radius: $border_radius 0 0 $border_radius;
+        border-width: 1px 0 1px 1px;
     }
 
     .button {
@@ -1764,52 +1757,98 @@ a.alphabet-links__link {
     font-family: $font_family_lato;
     font-weight: bold;
     color: $colour_green;
-    margin-top: -0.5em;
 }
 
 .house-splash {
+    display: block;
     width: 100%;
     overflow: hidden;
     position: relative;
-    margin-bottom: 2em;
+    margin-bottom: 1em;
 
-    @media only all and (min-width: 640px), print {
-        height: 15.5em;
-        background-color: $colour_primary;
-        -webkit-background-size: cover;
-        -moz-background-size: cover;
-        -o-background-size: cover;
-        background-size: cover;
-        background-repeat: no-repeat;
-        background-position: top left;
-        &.national-assembly {
-            background-image: url('/static/images/national-assembly.jpg');
-        }
-        &.ncop {
-            background-image: url('/static/images/national-council-of-provinces.jpg');
-        }
+    background-color: $colour_primary;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: top left;
+
+    &.national-assembly {
+        background-image: url('/static/images/national-assembly.jpg');
     }
 
+    &.ncop {
+        background-image: url('/static/images/national-council-of-provinces.jpg');
+    }
+
+    &.person-write {
+        background-image: url('/static/images/splash-mps.jpg');
+    }
+
+    &.committee-write {
+        background-image: url('/static/images/splash-committee.jpg');
+    }
+
+    @media only all and (min-width: 640px), print {
+        margin-bottom: 2em;
+        height: 15.5em;
+    }
+}
+
+a.house-splash {
+    text-decoration: none;
+
+    &:before {
+        content: "";
+        display: block;
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background: $colour_primary;
+        opacity: 0;
+        transition: opacity 100ms linear;
+    }
+
+    &:hover,
+    &:focus {
+        &:before {
+            opacity: 0.5;
+        }
+    }
 }
 
 .house-title {
+    position: relative; // stack above :before
+    padding: 1em;
+
+    h1, p {
+        color: #fff;
+        line-height: 1;
+    }
+
+    h1 {
+        font-size: 36px;
+    }
+
+    & > :last-child {
+        margin-bottom: 0;
+    }
+
     @media only all and (min-width: 640px), print {
+        padding: 1.5em;
         position: absolute;
         bottom: 0;
-        left: 2%;
-        h1, p {
-            color: #fff;
-        }
-        h1 {
-            font-size: 36px;
-        }
+        left: 0;
     }
 
 }
 
 .house-intro {
     font-size: 0.875em;
-    color: colour_blackish;
+    color: $colour_blackish;
     max-width: 714px;
     margin-bottom: 2em;
 }
@@ -2904,12 +2943,29 @@ ul.attendance__notes {
     }
 }
 
+#page {
+    .members-interest{
+        h3 {
+            background-color: $colour-lighter-grey;
+            padding: 0.6em;
+        }
+
+        h4 {
+            padding-left: 0.6em;
+        }
+    }
+}
+
 .members-interests {
     .members-interests-filter {
         padding: 1em;
         background-color: $colour_lighter_grey;
         vertical-align: top;
+        margin-bottom: 25px;
 
+        hr {
+            margin-bottom: 25px;
+        }
         label {
             width: 90px;
             display: inline-block;
@@ -2926,6 +2982,29 @@ ul.attendance__notes {
         select, input[type="text"] {
             vertical-align: top;
         }
+    }
+
+    #group-interests-form {
+        margin-bottom: 30px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .group-select {
+        font-size: 0.8em;
+        opacity: 0.8;
+        background-color: $colour_grey;
+        flex: 1;
+        margin-right: 10px;
+    }
+
+    .selected {
+        background-color: $colour_terracotta;
+        opacity: 0.95;
+    }
+
+    sup {
+        font-size: 0.8em;
     }
 }
 
@@ -3475,5 +3554,5 @@ ul.attendance__notes {
             color: #333;
         }
     }
-    
+
 }

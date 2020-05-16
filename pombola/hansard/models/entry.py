@@ -1,8 +1,9 @@
 import re
+import calendar
 
 from django.db import models
 
-from pombola.core.models import Person
+from pombola.core.models import Person, Place, ParliamentarySession
 from pombola.hansard.models import Sitting, Alias
 from pombola.hansard.models.base import HansardModelBase
 
@@ -20,6 +21,20 @@ class EntryQuerySet(models.query.QuerySet):
 
         for d in dates:
             qs = self.filter(sitting__start_date__month=d.month, sitting__start_date__year=d.year)
+            counts.append(dict(date=d, count=qs.count()))
+
+        return counts
+
+    def yearly_appearance_counts(self):
+        """Return an list of dictionaries for dates and counts for each year"""
+
+        # would prefer to do this as a single query but I can't seem to make the ORM do that.
+
+        dates = self.dates('sitting__start_date', 'year', 'DESC')
+        counts = []
+
+        for d in dates:
+            qs = self.filter(sitting__start_date__year=d.year)
             counts.append(dict(date=d, count=qs.count()))
 
         return counts
@@ -127,6 +142,11 @@ class Entry(HansardModelBase):
         """
 
         name = self.speaker_name
+
+        # Nominated reps don't have a unique speaker name, so fall back to the speaker title
+        if re.split(r'[,\s]+', self.speaker_name)[0] == 'Nominated':
+            name = self.speaker_title
+
         name = Alias.clean_up_name( name )
 
         # First check for a matching alias that is not ignored
@@ -192,6 +212,17 @@ class Entry(HansardModelBase):
                 reverse=True,
                 )
 
+        if len(results) == 0:
+            place_name, party_initials = self.place_name_and_party_initials_from_hansard_name(name)
+            if place_name and party_initials:
+                matches = self.find_person_from_constituency_and_party_reference(place_name, party_initials)
+                if matches:
+                    results = matches
+                else:
+                    # Create alias so admins can manually match
+                    Alias.objects.get_or_create(alias=name)
+                    return []
+
         found_one_result = len(results) == 1
 
         # If there is a single matching speaker and an unassigned alias delete it
@@ -207,3 +238,73 @@ class Entry(HansardModelBase):
             )
 
         return results
+
+    def place_name_and_party_initials_from_hansard_name(self, name):
+        if self.name_should_be_ignored(name):
+            return None, None
+        # Remove spaces from around dashes (both ASCII and Unicode) and normalise to ASCII
+        name = re.sub(ur'(?:\s+)?[\u2013\-](?:\s+)?', '-', name)
+        parts = re.split(r'[,\s]+', name)
+        party_initials_re = re.compile(r'^[A-Z-]{2,}$')
+        party_initials = [p for p in parts if party_initials_re.match(p) or p == 'Independent']
+        if len(party_initials) == 0:
+            return None, None
+        place_name = ' '.join([p.strip() for p in parts[:parts.index(party_initials[0])] if p not in party_initials])
+        # Party name should appear at the end of the name.
+        if party_initials[-1] != parts[-1]:
+            return None, None
+        return place_name, party_initials
+
+    def name_should_be_ignored(self, place_name):
+        # Ignore names that contain months
+        months = [calendar.month_name[month] for month in range(1, 13)]
+        for month in months:
+            if month in place_name:
+                return True
+        return False
+
+    def find_person_from_constituency_and_party_reference(self, place_name, party_initials):
+        sessions = ParliamentarySession.objects.filter(start_date__lte=self.sitting.start_date, end_date__gte=self.sitting.end_date, name__contains=self.sitting.venue.name)
+        if len(sessions) != 1:
+            return
+        session = sessions[0]
+        place_name_variations = set()
+        place_name_variations.add(place_name)
+        if ' ' in place_name:
+            place_name_variations.add(re.sub(r'\s+', '-', place_name))
+        if '-' in place_name:
+            place_name_variations.add(re.sub(r'\s?-\s?', ' ', place_name))
+        # Hansard uses unicode but Mzalendo uses ASCII for place names like Murang'a
+        if u'\u2019' in place_name:
+            place_name_variations.add(place_name.replace(u'\u2019', "'"))
+        # Special case
+        if place_name == 'Muranga':
+            place_name_variations.add("Murang'a")
+        places = Place.objects.filter(name__in=place_name_variations, parliamentary_session=session)
+        if 'CWR' in party_initials:
+            if 'county' in place_name.lower():
+                place_name_variations.add(re.sub(r'(?i)\s+county$', '', place_name))
+            # County Women's Representative, ensure place is a county
+            places = Place.objects.filter(
+                name__in=place_name_variations,
+                kind__slug='county',
+                parliamentary_session__start_date__lte=self.sitting.start_date,
+                parliamentary_session__end_date__gte=self.sitting.end_date
+            )
+        if len(places) != 1:
+            return
+        place = places[0]
+        positions = place.position_with_organisation_set.currently_active(when=self.sitting.start_date)
+        if 'CWR' in party_initials:
+            # County Women's Representative, ensure position in in National Assembly
+            positions = positions.filter(title__slug='member-national-assembly')
+        if len(positions) != 1:
+            return
+        position = positions[0]
+        # Now check that the matched person holds a position at the relevant party.
+        if not position.person.position_set.current_politician_positions(when=self.sitting.start_date).filter(
+            organisation__identifiers__identifier__in=party_initials,
+            organisation__identifiers__scheme='hansard-initials'
+        ).exists():
+            return
+        return [position.person]

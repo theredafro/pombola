@@ -38,11 +38,11 @@ class Command(BaseCommand):
         destination = args[0]
 
         organisationKinds = [
-            OrganisationKind.objects.filter(slug='committee').get(),
+            # OrganisationKind.objects.filter(slug='committee').get(),
             OrganisationKind.objects.filter(slug='national-assembly-committees').get(),
-            OrganisationKind.objects.filter(slug='ad-hoc-committees').get(),
-            OrganisationKind.objects.filter(slug='joint-committees').get(),
-            OrganisationKind.objects.filter(slug='ncop-committees').get(),
+            # OrganisationKind.objects.filter(slug='ad-hoc-committees').get(),
+            # OrganisationKind.objects.filter(slug='joint-committees').get(),
+            # OrganisationKind.objects.filter(slug='ncop-committees').get(),
         ]
         organisations = Organisation.objects.filter(kind__in=organisationKinds)
 
@@ -58,6 +58,15 @@ class Command(BaseCommand):
             'start_date',
             'end_date',
             'parties',
+            'cell',
+            'voice',
+            'email',
+        ]
+
+        contact_kinds = [
+            'cell',
+            'voice',
+            'email',
         ]
 
         with open(os.path.join(destination), 'wb') as output_file:
@@ -79,6 +88,12 @@ class Command(BaseCommand):
                     for party in person.parties():
                         parties.append(party.name)
 
+                    contacts = {}
+                    for contact_kind in contact_kinds:
+                        contacts[contact_kind] = []
+                        for contact in person.contacts.all().filter(kind__slug=contact_kind):
+                            contacts[contact_kind].append(contact.value)
+
                     position_output = {
                         'name': person.name,
                         'title': person.title,
@@ -90,7 +105,10 @@ class Command(BaseCommand):
                         'url': 'https://www.pa.org.za/person/{}/'.format(person.slug),
                         'start_date': formatApproxDate(position.start_date),
                         'end_date': formatApproxDate(position.end_date),
-                        'parties': ', '.join(parties)
+                        'parties': ', '.join(parties),
+                        'cell': ', '.join(contacts['cell']),
+                        'voice': ', '.join(contacts['voice']),
+                        'email': ', '.join(contacts['email']),
                     }
                     writer.writerow(position_output)
 

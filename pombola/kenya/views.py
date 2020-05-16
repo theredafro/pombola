@@ -4,6 +4,7 @@
 import logging
 import random
 import json
+import math
 import sys
 
 from django.conf import settings
@@ -27,6 +28,7 @@ from pombola.experiments.views import (
 )
 from pombola.hansard.views import HansardPersonMixin
 from pombola.kenya import shujaaz
+from pombola.sms.models import Message, Question
 
 from datetime import datetime
 
@@ -123,6 +125,32 @@ class KEHomeView(HomeView):
         context = super(KEHomeView, self).get_context_data(**kwargs)
         context['election_blog_posts'] = InfoPage.objects.filter(
             tags__slug='elections-2017').order_by('-publication_date')
+
+        sms_messages_per_page = 3
+
+        sms_current_page_index = int( self.request.GET.get('sms_page', 0) )
+
+        try:
+            context['sms_question'] = Question.objects.latest('created').text
+        except Question.DoesNotExist:
+            context['sms_question'] = ''
+
+        context['sms_all_messages'] = Message.objects.filter(status=Message.ACCEPTED)[:9]
+        slice_start = sms_current_page_index * sms_messages_per_page
+        context['sms_current_messages'] = context['sms_all_messages'][slice(
+            slice_start,
+            slice_start + sms_messages_per_page
+        )]
+        sms_total_pages = int(math.ceil(1.0 * len(context['sms_all_messages']) / sms_messages_per_page))
+        sms_pages = []
+        for i in range(sms_total_pages):
+            sms_pages.append({
+                "i": i,
+                "n": i + 1,
+                "current": i == sms_current_page_index
+            })
+        context['sms_pages'] = sms_pages
+
         return context
 
 
@@ -191,7 +219,7 @@ class KEPersonDetailAppearances(HansardPersonMixin, PersonDetailSub, KEPersonDet
         context = super(KEPersonDetailAppearances, self).get_context_data(**kwargs)
         context['hansard_entries_to_show'] = ":5"
         context['lifetime_summary'] = context['hansard_entries'] \
-            .monthly_appearance_counts()
+            .yearly_appearance_counts()
         return context
 
 
@@ -564,6 +592,10 @@ class ShujaazFinalists2015View(TemplateView):
         context['finalists_column_2'] = finalists[half:]
 
         return context
+
+
+class ShujaazFinalists2018View(TemplateView):
+    template_name = 'shujaaz-2018.html'
 
 
 class YoungRepresentativesView(TemplateView):

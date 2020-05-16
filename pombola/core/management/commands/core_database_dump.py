@@ -5,7 +5,7 @@ import sys
 from tempfile import NamedTemporaryFile
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
 
@@ -68,16 +68,11 @@ class Command(BaseCommand):
                 'place_data_entry',
                 'projects_project',
             ])
-        if settings.COUNTRY_APP in ('ghana',):
-            # These tables are no longer used, I believe, and migrated
-            # to core / hansard:
+        if settings.COUNTRY_APP in ('kenya',):
+            # Ignore SMS tables as they contain phone numbers.
             tables_to_ignore.update([
-                'ghana_hansardentry',
-                'ghana_mp',
-                'ghana_uploadmodel',
-                'odekro_hansardentry',
-                'odekro_mp',
-                'odekro_uploadmodel'
+                'sms_message',
+                'sms_question',
             ])
         tables_to_dump = [
             t for t in tables if t not in tables_to_ignore
@@ -165,6 +160,7 @@ class Command(BaseCommand):
                 'speeches_speech',
                 'speeches_speech_tags',
                 'speeches_tag',
+                'surveys_survey',
                 'za_hansard_answer',
                 'za_hansard_pmgcommitteeappearance',
                 'za_hansard_pmgcommitteereport',
@@ -179,7 +175,7 @@ class Command(BaseCommand):
                 'spinner_quotecontent',
                 'spinner_slide',
             ]
-        if settings.COUNTRY_APP in ('ghana', 'kenya',):
+        if settings.COUNTRY_APP in ('kenya',):
             # hansard, place_data, projects, votematch, wordcloud
             expected_tables += [
                 'hansard_alias',
@@ -204,10 +200,10 @@ class Command(BaseCommand):
         unexpected = set(tables_to_dump) - set(expected_tables)
         if unexpected:
             print '''The following tables were found which weren't expected
-and which hadn't been explictly excluded.  If these are safe to make
+and which hadn't been explicitly excluded.  If these are safe to make
 available in a public database dump (in particular check that they
 contain no personal information of site users) then add them to
-'expected_table'. Otherwise (i.e. they should *not* be made availble
+'expected_table'. Otherwise (i.e. they should *not* be made available
 publicly) add them to 'tables_to_ignore'.'''
             for t in sorted(unexpected):
                 print " ", t
@@ -233,6 +229,7 @@ publicly) add them to 'tables_to_ignore'.'''
                 'pg_dump',
                 '--no-owner',
                 '--no-acl',
+                '--schema=public',
             ]
 
             command.append({
@@ -267,7 +264,10 @@ publicly) add them to 'tables_to_ignore'.'''
                         shell_command = 'PGPASSWORD={0} '.format(
                             shellquote(db_settings['PASSWORD']))
                     shell_command += ' '.join(shellquote(p) for p in command)
-                    subprocess.check_call(['ssh', host, shell_command], stdout=f)
+                    try:
+                        subprocess.check_call(['ssh', host, shell_command], stdout=f)
+                    except subprocess.CalledProcessError:
+                        raise CommandError('Problem trying to ssh to {}'.format(host))
                 else:
                     subprocess.check_call(command, stdout=f)
             os.chmod(ntf.name, 0o644)

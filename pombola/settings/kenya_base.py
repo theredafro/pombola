@@ -10,12 +10,13 @@ OPTIONAL_APPS = [
     'pombola.votematch',
     'pombola.bills',
     'pombola.wordcloud',
+    'pombola.sms',
 ]
 
 TWITTER_USERNAME = 'MzalendoWatch'
 TWITTER_WIDGET_ID = '354553209517404160'
 
-BLOG_RSS_FEED = 'http://www.mzalendo.com/feed/'
+BLOG_RSS_FEED = 'https://www.mzalendo.com/feed/'
 
 MAP_BOUNDING_BOX_NORTH = 5.06
 MAP_BOUNDING_BOX_EAST = 41.91
@@ -73,6 +74,18 @@ COUNTRY_JS = {
             'js/collapse-responsibilities.js',
         ),
         'output_filename': 'js/collapse-responsibilities.js',
+    },
+    'sms-carousel': {
+        'source_filenames': (
+            'js/sms-carousel.js',
+        ),
+        'output_filename': 'js/sms-carousel.js',
+    },
+    'featured-person': {
+        'source_filenames': (
+            'js/featured-person.js',
+        ),
+        'output_filename': 'js/featured-person.js',
     },
     'lazy-loaded-images': {
         'source_filenames': (

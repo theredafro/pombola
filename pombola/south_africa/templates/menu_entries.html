@@ -14,7 +14,7 @@
 <li><a href="{% url "core_geocoder_search" %}" role="menuitem">Rep Locator</a></li>
 
 <li>
-  <a href="{% url "person_list" %}" class="has-dropdown" role="menuitem" {% if include_sub_menu_entries %}aria-haspopup="true"{% endif %}>People</a>
+  <a class="has-dropdown" role="menuitem" {% if include_sub_menu_entries %}aria-haspopup="true"{% endif %}>People</a>
   {% if include_sub_menu_entries %}
     <ul id="parliament-overview" class="js-hover-dropdown" role="menu">
       <li><a href="{% url "core_search" %}?section=persons" role="menuitem">Find by name</a></li>
@@ -41,15 +41,7 @@
   {% endif %}
 </li>
 
-<li>
-  <a href="{% url "info_blog_list" %}" class="has-dropdown" role="menuitem" {% if include_sub_menu_entries %}aria-haspopup="true"{% endif %}>Blog</a>
-  {% if include_sub_menu_entries %}
-    <ul id="blog-overview" class="js-hover-dropdown" role="menu">
-      <li><a href="{% url 'info_blog_category' slug='week-parliament' %}" role="menuitem">That Week In Parliament</a></li>
-      <li><a href="{% url 'info_blog_category' slug='commentary' %}" role="menuitem">Commentary</a></li>
-    </ul>
-  {% endif %}
-</li>
+<li><a href="{% url 'info_blog_list' %}" role="menuitem">Blog</a></li>
 
 <li><a href="{% url 'position_pt_ok' pt_slug='member' ok_slug='parliament' %}?order=name&amp;a=1" role="menuitem">MP Profiles</a></li>
 <li><a href="{% url 'mp-attendance' %}" role="menuitem">MP Attendance</a></li>
@@ -62,10 +54,11 @@
         <a href="{% url "info_page" slug="elections" %}" role="menuitem">Elections</a>
         <ul>
           <li><a href="{% url "sa-election-overview-year" election_year="2014" %}" role="menuitem">Election 2014 Candidates</a></li>
+          <li><a href="{% url "sa-election-overview-year" election_year="2019" %}" role="menuitem">Election 2019 Candidates</a></li>
         </ul>
       </li>
       <li><a href="{% url "info_page" slug="petitions" %}" role="menuitem">Petitions</a></li>
-      <li><a href="{% url "sa-committees-list" %}" role="menuitem">National Assembly Committees</a></li>
+      <li><a href="{% url "sa-committees-list" %}" role="menuitem">Write to a Committee</a></li>
     </ul>
   {% endif %}
 </li>

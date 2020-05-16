@@ -84,7 +84,7 @@ class LatLonDetailBaseView(BasePlaceDetailView):
 
     def get_ward_councillors(self, location):
         # Look up the ward on MapIt:
-        url = 'http://mapit.code4sa.org/point/4326/{lon},{lat}?type=WD'.format(
+        url = 'http://mapit.code4sa.org/point/4326/{lon},{lat}?type=WD,MN'.format(
             lon=location.x, lat=location.y
         )
 
@@ -96,7 +96,15 @@ class LatLonDetailBaseView(BasePlaceDetailView):
         mapit_json = r.json()
         if not mapit_json:
             return []
-        ward_id = mapit_json.values()[0]['codes']['MDB']
+        ward = None
+        muni = None
+        for item in mapit_json.values():
+            if item['type_name'] == 'Ward':
+                ward = item
+            elif item['type_name'] == 'Municipality':
+                muni = item
+        ward_id = ward['codes']['MDB']
+        muni_id = muni['codes']['MDB']
 
         # Then find the ward councillor from that ward ID. There
         # should only be one at the moment, but make it a list in case
@@ -137,6 +145,7 @@ class LatLonDetailBaseView(BasePlaceDetailView):
                 'element_id': 'ward-councillor-{ward_id}-0'.format(
                     ward_id=ward_id
                 ),
+                'muni_id': muni_id
             }
         ]
 

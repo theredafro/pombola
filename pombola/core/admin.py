@@ -14,6 +14,8 @@ from slug_helpers.admin import StricterSlugFieldMixin
 from pombola.core import models
 from pombola.scorecards import models as scorecard_models
 
+admin.site.register(models.ParliamentarySession)
+
 
 def create_admin_link_for(obj, link_text):
     return u'<a href="{url}">{link_text}</a>'.format(
@@ -211,6 +213,7 @@ class PlaceAdmin(StricterSlugFieldMixin, admin.ModelAdmin):
     search_fields = ('name', 'organisation__name')
     inlines = (
         InformationSourceInlineAdmin,
+        ImageAdminInline,
         ScorecardInlineAdmin,
         IdentifierInlineAdmin,
         )
@@ -258,6 +261,7 @@ class OrganisationAdmin(StricterSlugFieldMixin, admin.ModelAdmin):
     list_display = ['slug', 'name', 'kind']
     list_filter = ['kind']
     search_fields = ['name']
+    exclude = ['show_attendance']
 
 
 @admin.register(models.OrganisationKind)

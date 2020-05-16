@@ -4,11 +4,12 @@ COUNTRY_APP = 'south_africa'
 
 OPTIONAL_APPS = APPS_REQUIRED_BY_SPEECHES + (
     'speeches',
-    'za_hansard',
+    'pombola.za_hansard',
     'pombola.interests_register',
     'pombola.spinner',
     'pombola.writeinpublic',
-    'formtools'
+    'formtools',
+    'pombola.surveys',
 )
 
 SPEECH_SUMMARY_LENGTH = 30

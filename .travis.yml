@@ -1,9 +1,10 @@
-sudo: false
+dist: trusty
 
 notifications:
   email: false
 
 language: python
+python: 2.7
 cache: pip
 
 addons:
@@ -14,6 +15,8 @@ addons:
     - postgresql-9.6-postgis-2.3
     # This is needed so that pg_config works for psycopg2's version detection
     - postgresql-server-dev-9.6
+    - antiword
+    - pdftohtml
 
 install:
   - wget ${ES_DOWNLOAD_URL}
@@ -21,12 +24,10 @@ install:
   - elasticsearch-${ES_VERSION}/bin/elasticsearch &
   - pip install -U pip
   - bundle update json
-  - bundle install --deployment --path ../gems --binstubs ../gem-bin
+  - bundle install --deployment --path data/gems --binstubs data/gem-bin
   # Now install the rest of the required Python packages:
   - CFLAGS="-O0" pip install -r requirements.txt
-  - pip install python-coveralls
-  - pip install scrutinizer-ocular
-  - pip check
+  # - pip check
   # Create a basic general.yml file:
   - sed -r
     -e "s,(POMBOLA_DB_USER:) 'sayit',\\1 'postgres',"
@@ -42,11 +43,7 @@ before_script:
 
 script:
   - wget -q --waitretry=1 --retry-connrefused -T 10 -O - http://127.0.0.1:9200
-  - ./run-tests --coverage
-
-after_success:
-  - coveralls
-  - ocular --data-file ".coverage"
+  - ./run-tests
 
 env:
   - ES_VERSION=0.90.13 ES_DOWNLOAD_URL=https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-${ES_VERSION}.tar.gz

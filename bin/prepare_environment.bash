@@ -6,12 +6,15 @@ set -e
 # check that we are in the expected directory
 cd "$(dirname $BASH_SOURCE)"/..
 
+# Set DATADIR.
+DATADIR=$(grep ^DATA_DIR conf/general.yml | awk '{ print $NF}' | tr -d "'\"")
+DATADIR=${DATADIR:-data}
 
 # Some env variables used during development seem to make things break - set
 # them back to the defaults which is what they would have on the servers.
 PYTHONDONTWRITEBYTECODE=""
 
-virtualenv_dir='../pombola-virtualenv'
+virtualenv_dir="${DATADIR}/pombola-virtualenv"
 virtualenv_activate="$virtualenv_dir/bin/activate"
 
 # create the virtual environment, install/update required packages
@@ -23,16 +26,10 @@ fi
 source $virtualenv_activate
 
 # Remove old pip packages installed with the -e switch
-rm -rf $virtualenv_dir/src/django-sayit
 rm -rf $virtualenv_dir/src/popit-resolver
 rm -rf $virtualenv_dir/src/popit-django
 rm -rf $virtualenv_dir/src/pygeocoder
-
-# Upgrade pip to a secure version
-# curl -L -s https://raw.github.com/pypa/pip/master/contrib/get-pip.py | python
-# Revert to the line above once we can get a newer setuptools from Debian, or
-# pip ceases to need such a recent one.
-curl -L -s https://raw.github.com/mysociety/commonlib/master/bin/get_pip.bash | bash
+rm -rf $virtualenv_dir/src/za_hansard
 
 # Install all the packages, making sure that a couple of packages that
 # used to be required, but which would now cause problems, aren't present:
@@ -43,12 +40,11 @@ CFLAGS="-O0" pip install -r requirements.txt
 # make sure that there is no old code (the .py files may have been git deleted)
 find . -name '*.pyc' -delete
 
-# get the database up to speed
-./manage.py syncdb --noinput
+# run any pending database migrations
 ./manage.py migrate
 
 # Install gems in order to compile the CSS
-bundle install --deployment --path ../gems --binstubs ../gem-bin
+bundle install --deployment --path ${DATADIR}/gems --binstubs ${DATADIR}/gem-bin
 
 # Try to make sure that the MapIt CSS has been generated.
 # The '|| echo' means that the script carries on even if this fails,

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="no-js">
+<html lang="{% block html_lang %}en{% endblock %}" class="no-js">
     <head>
 {% comment %}
 
@@ -16,7 +16,7 @@
         </title>
 
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0">
+        <meta name="viewport" content="initial-scale=1">
         <meta http-equiv="cleartype" content="on">
         <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 
@@ -25,6 +25,14 @@
 
         {% if settings.FACEBOOK_APP_ID %}
         <meta property="fb:app_id" content="{{ settings.FACEBOOK_APP_ID }}" />
+        {% endif %}
+
+        {% if settings.GOOGLE_SITE_VERIFICATION %}
+        <meta name="google-site-verification" content="{{ settings.GOOGLE_SITE_VERIFICATION }}" />
+        {% endif %}
+
+        {% if settings.STAGING %}
+        <meta name="robots" content="noindex, nofollow" />
         {% endif %}
 
         {% block open_graph %}
@@ -107,6 +115,7 @@
         </div>
         {% endblock %}
 
+        {% block footer %}
         <footer id="site-footer">
             <div class="wrapper">
                 {% include "footer.html" %}
@@ -121,6 +130,7 @@
 
             </div>
         </footer>
+        {% endblock %}
 
         {% block js_end_of_body %}
           <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>

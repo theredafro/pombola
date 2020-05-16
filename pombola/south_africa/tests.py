@@ -340,6 +340,7 @@ class SAPersonDetailViewTest(PersonSpeakerMappingsMixin, TestCase):
             slug='national-assembly',
             name='National Assembly',
             kind=parliament,
+            show_attendance=True
             )
         old_org = models.Organisation.objects.create(
             slug='old-assembly',
@@ -500,7 +501,15 @@ class SAPersonDetailViewTest(PersonSpeakerMappingsMixin, TestCase):
             len(expected[1]['categories'][2]['entries'][0])
         )
 
+    def _setup_party_for_attendance(self, show_attendance):
+        org_kind_party = models.OrganisationKind.objects.create(name='Party', slug='party')
+        party = models.Organisation.objects.create(name='Party', slug='party', kind=org_kind_party, show_attendance=show_attendance)
+        person = models.Person.objects.get(slug='moomin-finn')
+        positiontitle = models.PositionTitle.objects.create(name='Member', slug='member')
+        models.Position.objects.create(person=person, organisation=party, title=positiontitle)
+
     def test_attendance_data(self):
+        self._setup_party_for_attendance(True)
         test_data_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             'data/test/attendance_587.json',
@@ -548,6 +557,7 @@ class SAPersonDetailViewTest(PersonSpeakerMappingsMixin, TestCase):
 
     @patch('requests.get', side_effect=connection_error)
     def test_attendance_data_requests_errors(self, m):
+        self._setup_party_for_attendance(True)
         # Check context if identifier exists, cache lookup misses
         # and the PMG API is unavailable.
         pmg_api_cache = caches['pmg_api']
@@ -562,6 +572,26 @@ class SAPersonDetailViewTest(PersonSpeakerMappingsMixin, TestCase):
 
         context = self.client.get(reverse('person', args=('moomin-finn',))).context
         assert context['attendance'] == 'UNAVAILABLE'
+
+    def test_no_attendance_if_show_attendance_false(self):
+        self._setup_party_for_attendance(False)
+        test_data_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            'data/test/attendance_587.json',
+            )
+        with open(test_data_path) as f:
+            raw_data = json.load(f)
+
+        pmg_api_cache = caches['pmg_api']
+        pmg_api_cache.set(
+            "https://api.pmg.org.za/member/moomin-finn/attendance/",
+            raw_data['results'],
+            )
+
+        context = self.client.get(reverse('person', args=('moomin-finn',))).context
+
+        self.assertEqual('attendance' in context, False)
+
 
     def _setup_example_positions(self, past, current):
         parliament = models.OrganisationKind.objects.create(
@@ -822,28 +852,45 @@ class SAMpAttendancePageTest(TestCase):
         # Needs to be a member of a party.
         models.Position.objects.create(person=self.person2, organisation=party1, title=positiontitle1)
 
+        self.person3 = models.Person.objects.create(legal_name='Person3', slug='person3', family_name='3', given_name='Person')
+        positiontitle3 = models.PositionTitle.objects.create(name='Deputy Minister of Something', slug='deputy-minister-of-something')
+        models.Position.objects.create(person=self.person3, organisation=party1, title=positiontitle2, start_date='2000-01-01', end_date='2000-03-30')
+        models.Position.objects.create(person=self.person3, organisation=party1, title=positiontitle3, start_date='2000-04-01', end_date='future')
+        # Needs to be a member of a party.
+        models.Position.objects.create(person=self.person3, organisation=party1, title=positiontitle1)
+
     def test_mp_attendance_context(self):
         raw_data = [{
+            u'start_date': u'2000-01-01',
             u'end_date': u'2000-12-31',
             u'meetings_by_member': [
                 {u'member': {
                     u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person1/',
-                    u'party_name': u'Party1', u'name': u'Person 1', u'id': 1},
-                u'meetings': [
+                    u'party_name': u'PARTY1', u'name': u'1, P', u'id': 1},
+                 u'meetings': [
                     {u'date': u'2000-03-01', u'attendance': u'A'},
                     {u'date': u'2000-03-02', u'attendance': u'P'},
                     {u'date': u'2000-03-03', u'attendance': u'P'},
                     {u'date': u'2000-03-04', u'attendance': u'L'}]},
                 {u'member': {
                     u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person2/',
-                    u'party_name': u'Party1', u'name': u'Person 2', u'id': 2},
-                u'meetings': [
+                    u'party_name': u'PARTY1', u'name': u'2, Dr P', u'id': 2},
+                 u'meetings': [
                     {u'date': u'2000-03-01', u'attendance': u'A'},
                     {u'date': u'2000-03-01', u'attendance': u'P'},
                     {u'date': u'2000-04-01', u'attendance': u'P'},
                     {u'date': u'2000-04-01', u'attendance': u'P'},
-                    {u'date': u'2000-04-01', u'attendance': u'A'}]}],
-            u'start_date': u'2000-01-01'}]
+                    {u'date': u'2000-04-01', u'attendance': u'A'}]},
+                {u'member': {
+                    u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person3/',
+                    u'party_name': u'PARTY1', u'name': u'3, P', u'id': 3},
+                 u'meetings': [
+                    {u'date': u'2000-03-01', u'attendance': u'P'},
+                    {u'date': u'2000-04-01', u'attendance': u'P'},
+                    {u'date': u'2000-04-01', u'attendance': u'P'},
+                    {u'date': u'2000-04-01', u'attendance': u'A'}]}
+            ],
+        }]
 
         pmg_api_cache = caches['pmg_api']
         pmg_api_cache.set(
@@ -855,7 +902,9 @@ class SAMpAttendancePageTest(TestCase):
         url = "%s?year=2000" % reverse('mp-attendance')
         context = self.client.get(url).context
 
-        expected = [{'name': u'Person 2', 'pa_url': u'/person/person2/', 'party_name': u'Party1', 'present': 2}]
+        expected = [
+            {'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'PARTY1', 'present': 2, 'position': u'minister'},
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'present': 3, 'position': u'deputy-minister'}]
         self.assertEqual(context['attendance_data'], expected)
 
         # MP attendance selected
@@ -865,9 +914,9 @@ class SAMpAttendancePageTest(TestCase):
         # total: number of meetings
         # absent, arrived_late, depart_early, present: percentages
         expected = [
-            {'name': u'Person 1', 'party_name': u'Party1', 'pa_url': u'/person/person1/',
+            {'name': u'1, P', 'party_name': u'PARTY1', 'pa_url': u'/person/person1/',
             'absent': 25, 'arrive_late': 25, 'depart_early': 0, 'total': 4, 'present': 75},
-            {'name': u'Person 2', 'party_name': u'Party1', 'pa_url': u'/person/person2/',
+            {'name': u'2, Dr P', 'party_name': u'PARTY1', 'pa_url': u'/person/person2/',
             'absent': 50, 'arrive_late': 0, 'depart_early': 0, 'total': 2, 'present': 50}
         ]
         self.assertEqual(context['attendance_data'], expected)
@@ -878,7 +927,7 @@ class SAMpAttendancePageTest(TestCase):
             u'meetings_by_member': [
                 {u'member': {
                     u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person2/',
-                    u'party_name': u'Party1', u'name': u'Person 2', u'id': 2},
+                    u'party_name': u'PARTY1', u'name': u'2, Dr P', u'id': 2},
                 u'meetings': [
                     {u'date': u'2000-03-01', u'attendance': u'A'},
                     {u'date': u'2000-03-01', u'attendance': u'P'},]}],
@@ -894,7 +943,9 @@ class SAMpAttendancePageTest(TestCase):
         context = self.client.get(url).context
 
         # Zero attendance as a Minister
-        expected = [{'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'PARTY1', 'present': 0}]
+        expected = [
+            {'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'PARTY1', 'position': u'minister', 'present': 0},
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'position': u'deputy-minister', 'present': 0}]
         self.assertEqual(context['attendance_data'], expected)
 
         # Some attendance as an MP
@@ -904,7 +955,7 @@ class SAMpAttendancePageTest(TestCase):
         # total: number of meetings
         # absent, arrived_late, depart_early, present: percentages
         expected = [
-            {'name': u'Person 2', 'party_name': u'Party1', 'pa_url': u'/person/person2/',
+            {'name': u'2, Dr P', 'party_name': u'PARTY1', 'pa_url': u'/person/person2/',
             'absent': 50, 'arrive_late': 0, 'depart_early': 0, 'total': 2, 'present': 50}
         ]
         self.assertEqual(context['attendance_data'], expected)
@@ -917,7 +968,7 @@ class SAMpAttendancePageTest(TestCase):
             u'meetings_by_member': [
                 {u'member': {
                     u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person2/',
-                    u'party_name': u'Party1', u'name': u'Person 2', u'id': 2},
+                    u'party_name': u'PARTY1', u'name': u'2, Dr P', u'id': 2},
                 u'meetings': [
                     {u'date': u'2000-03-01', u'attendance': u'A'},
                     {u'date': u'2000-03-01', u'attendance': u'P'},]}],
@@ -933,7 +984,66 @@ class SAMpAttendancePageTest(TestCase):
         context = self.client.get(url).context
 
         # Zero attendance as a Minister
-        expected = [{'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'', 'present': 0}]
+        expected = [
+            {'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'', 'position': u'minister', 'present': 0},
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'position': u'deputy-minister', 'present': 0}]
+        self.assertEqual(context['attendance_data'], expected)
+
+
+        # When filtered by party, only display ministers with active memberships
+        url = "%s?year=2000&party=PARTY1" % reverse('mp-attendance')
+        context = self.client.get(url).context
+
+        expected = [
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'position': u'deputy-minister', 'present': 0}]
+        self.assertEqual(context['attendance_data'], expected)
+
+
+    def test_divide_2019_attendance_records_pre_and_post_elections(self):
+        # Pre election: 01/01/2019 - 30/06/2019
+        # Post election: 01/07/2019 - 31/12/2019
+
+        raw_data = [{
+            u'start_date': u'2019-01-01',
+            u'end_date': u'2019-12-31',
+            u'meetings_by_member': [
+                {u'member': {
+                    u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person2/',
+                    u'party_name': u'PARTY1', u'name': u'2, Dr P', u'id': 2},
+                u'meetings': [
+                    {u'date': u'2019-01-01', u'attendance': u'A'},
+                    {u'date': u'2019-06-30', u'attendance': u'P'},
+                    {u'date': u'2019-07-01', u'attendance': u'P'},
+                    {u'date': u'2019-12-31', u'attendance': u'P'},]},
+                {u'member': {
+                    u'party_id': 1, u'pa_url': u'http://www.pa.org.za/person/person3/',
+                    u'party_name': u'PARTY1', u'name': u'3, P', u'id': 3},
+                u'meetings': [
+                    {u'date': u'2019-07-01', u'attendance': u'P'}]}]
+            }]
+
+        pmg_api_cache = caches['pmg_api']
+        pmg_api_cache.set(
+            "https://api.pmg.org.za/committee-meeting-attendance/meetings-by-member/",
+            raw_data,
+        )
+
+        url = "%s?year=2019" % reverse('mp-attendance')
+        context = self.client.get(url).context
+
+        expected = [
+            {'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'PARTY1', 'position': u'minister', 'present': 1},
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'position': u'deputy-minister', 'present': 0}]
+
+        self.assertEqual(context['attendance_data'], expected)
+
+        url = "%s?year=2019+-+post+elections" % reverse('mp-attendance')
+        context = self.client.get(url).context
+
+        expected = [
+            {'name': u'2, Dr P', 'pa_url': u'/person/person2/', 'party_name': u'PARTY1', 'position': u'minister', 'present': 2},
+            {'name': u'3, P', 'pa_url': u'/person/person3/', 'party_name': u'PARTY1', 'position': u'deputy-minister', 'present': 1}]
+
         self.assertEqual(context['attendance_data'], expected)
 
 
@@ -1879,7 +1989,6 @@ class SAPlaceDetailViewTest(WebTest):
         self.assertEqual(1, resp.context['legislature_people_count'])
 
         self.assertEqual(3, len(resp.context['related_people']))
-        self.assertContains(resp, "There are 3 people related to Test Place.")
 
     def test_multiple_positions(self):
 
@@ -1915,7 +2024,6 @@ class SAPlaceDetailViewTest(WebTest):
         self.assertEqual(0, resp.context['legislature_people_count'])
 
         self.assertEqual(1, len(resp.context['related_people']))
-        self.assertContains(resp, "There is 1 person related to Test Place.")
 
     def test_ncop_delegate(self):
 
@@ -1942,7 +2050,6 @@ class SAPlaceDetailViewTest(WebTest):
         self.assertEqual(0, resp.context['legislature_people_count'])
 
         self.assertEqual(1, len(resp.context['related_people']))
-        self.assertContains(resp, "There is 1 person related to Test Place.")
 
     def test_former_positions(self):
 
@@ -2057,9 +2164,14 @@ class SAPlaceDetailViewTest(WebTest):
 @attr(country='south_africa')
 class SAMembersInterestsBrowserTest(TestCase):
     def setUp(self):
-        person = models.Person.objects.create(
+        person1 = models.Person.objects.create(
             legal_name='Alice Smith',
             slug='asmith')
+
+        person2 = models.Person.objects.create(
+            legal_name='Bob Smith',
+            slug='bobsmith'
+        )
 
         org_kind_party, created = models.OrganisationKind.objects.get_or_create(
             name='Party',
@@ -2077,17 +2189,9 @@ class SAMembersInterestsBrowserTest(TestCase):
             name='Party2',
             kind=org_kind_party,
             slug='party2')
-        other_org1, created = models.Organisation.objects.get_or_create(
-            name='Organisation1',
-            kind=org_kind_committee,
-            slug='organisation1')
-        other_org2, created = models.Organisation.objects.get_or_create(
-            name='Organisation2',
-            kind=org_kind_committee,
-            slug='organisation2')
 
-        models.Position.objects.create(person=person, organisation=party1)
-        models.Position.objects.create(person=person, organisation=other_org1)
+        models.Position.objects.create(person=person1, organisation=party1)
+        models.Position.objects.create(person=person2, organisation=party1)
 
         category1 = Category.objects.create(name=u"Category A", sort_order=1)
         category2 = Category.objects.create(name=u"Category B", sort_order=2)
@@ -2101,25 +2205,30 @@ class SAMembersInterestsBrowserTest(TestCase):
             date=date(2012, 2, 24))
 
         entry1 = Entry.objects.create(
-            person=person,
+            person=person1,
             release=release1,
             category=category1,
             sort_order=1)
         entry2 = Entry.objects.create(
-            person=person,
+            person=person1,
             release=release1,
             category=category1,
             sort_order=2)
         entry3 = Entry.objects.create(
-            person=person,
+            person=person1,
             release=release1,
             category=category2,
             sort_order=3)
         entry4 = Entry.objects.create(
-            person=person,
+            person=person1,
             release=release2,
             category=category2,
             sort_order=3)
+        entry5 = Entry.objects.create(
+            person=person2,
+            release=release1,
+            category=category1,
+            sort_order=4)
 
         EntryLineItem.objects.create(entry=entry1,key=u'Field1',value=u'Value1')
         EntryLineItem.objects.create(entry=entry1,key=u'Source',value=u'Source1')
@@ -2145,7 +2254,7 @@ class SAMembersInterestsBrowserTest(TestCase):
 
         #test year filter
         context = self.client.get(reverse('sa-interests-index')+'?release=2013-data').context
-        self.assertEqual(len(context['data']), 1)
+        self.assertEqual(len(context['data']), 2)
 
         #test party filter
         context = self.client.get(
@@ -2155,19 +2264,9 @@ class SAMembersInterestsBrowserTest(TestCase):
         context = self.client.get(reverse('sa-interests-index')+'?party=party2').context
         self.assertEqual(len(context['data']), 0)
 
-        #test membership filter
-        context = self.client.get(
-            reverse('sa-interests-index')+'?organisation=organisation1'
-        ).context
-        self.assertEqual(len(context['data']), 2)
-        context = self.client.get(
-            reverse('sa-interests-index')+'?organisation=organisation2'
-        ).context
-        self.assertEqual(len(context['data']), 0)
-
     def test_members_interests_browser_section_view(self):
         context = self.client.get(reverse('sa-interests-index')+'?category=category-a').context
-        self.assertEqual(len(context['data']), 2)
+        self.assertEqual(len(context['data']), 3)
         self.assertTrue('headers' in context)
         self.assertEqual(len(context['data'][0]), len(context['headers']))
 
@@ -2175,19 +2274,9 @@ class SAMembersInterestsBrowserTest(TestCase):
         context = self.client.get(
             reverse('sa-interests-index')+'?category=category-a&party=party1'
         ).context
-        self.assertEqual(len(context['data']), 2)
+        self.assertEqual(len(context['data']), 3)
         context = self.client.get(
             reverse('sa-interests-index')+'?category=category-a&party=party2'
-        ).context
-        self.assertEqual(len(context['data']), 0)
-
-        #organisation filter
-        context = self.client.get(
-            reverse('sa-interests-index')+'?category=category-a&organisation=organisation1'
-        ).context
-        self.assertEqual(len(context['data']), 2)
-        context = self.client.get(
-            reverse('sa-interests-index')+'?category=category-a&organisation=organisation2'
         ).context
         self.assertEqual(len(context['data']), 0)
 
@@ -2208,22 +2297,22 @@ class SAMembersInterestsBrowserTest(TestCase):
         context = self.client.get(
             reverse('sa-interests-index')+'?display=numberbyrepresentative&release=2013-data'
         ).context
-        self.assertEqual(len(context['data']), 2)
+        self.assertEqual(len(context['data']), 3)
         self.assertEqual(context['data'][0].c, 2)
 
     def test_members_interests_browser_numberbysource_view(self):
         context = self.client.get(
             reverse('sa-interests-index')+'?display=numberbysource'
         ).context
-        self.assertEqual(len(context['data']), 3)
+        self.assertEqual(len(context['data']), 2)
         self.assertEqual(context['data'][0].c, 2)
 
         #release filter
         context = self.client.get(
-            reverse('sa-interests-index')+'?display=numberbyrepresentative&release=2013-data'
+            reverse('sa-interests-index')+'?display=numberbyrepresentative&release=2012-data'
         ).context
-        self.assertEqual(len(context['data']), 2)
-        self.assertEqual(context['data'][0].c, 2)
+        self.assertEqual(len(context['data']), 1)
+        self.assertEqual(context['data'][0].c, 1)
 
     def test_members_interests_browser_sources_view(self):
         context = self.client.get(

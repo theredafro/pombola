@@ -10,6 +10,7 @@ from collections import defaultdict
 
 from django.core import exceptions
 from django.core.urlresolvers import reverse
+from django.core.validators import MinValueValidator
 
 from django.db.models import Q
 from django.db import transaction
@@ -151,6 +152,14 @@ class ModelBase(models.Model):
             args=[self.id]
         )
         return url
+
+    def get_disqus_thread_data(self, request):
+        return {
+            'disqus_canonical_url':
+            request.build_absolute_uri(self.get_absolute_url()),
+            'disqus_identifier':
+            '{0}-{1}'.format(self.css_class(), self.id)
+        }
 
     def get_popolo_id(self, id_scheme):
         table_name = self._meta.db_table
@@ -726,6 +735,7 @@ class OrganisationQuerySet(models.query.GeoQuerySet):
 
 class Organisation(ModelBase, HasImageMixin, IdentifierMixin):
     name = models.CharField(max_length=200)
+    short_name = models.CharField(max_length=200, editable=False)
     slug = models.SlugField(
         max_length=200,
         unique=True,
@@ -736,6 +746,17 @@ class Organisation(ModelBase, HasImageMixin, IdentifierMixin):
     kind = models.ForeignKey('OrganisationKind')
     started = ApproximateDateField(blank=True, help_text=date_help_text)
     ended = ApproximateDateField(blank=True, help_text=date_help_text)
+
+    seats = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+        help_text="The number of seats this organisation nominally has."
+    )
+
+    show_attendance = models.BooleanField(
+        default=False,
+        help_text="Toggles attendance records on person detail pages for people who belong to this organization.")
 
     fields_to_whitespace_normalize = ['name']
 
@@ -753,7 +774,7 @@ class Organisation(ModelBase, HasImageMixin, IdentifierMixin):
         return ('organisation', [self.slug])
 
     class Meta:
-       ordering = ["slug"]
+       ordering = ["name"]
 
     def is_ongoing(self):
         """Return True or False for whether the organisation is currently ongoing"""
@@ -766,6 +787,24 @@ class Organisation(ModelBase, HasImageMixin, IdentifierMixin):
             now = datetime.date.today()
             now_approx = ApproximateDate(year=now.year, month=now.month, day=now.day)
             return now_approx <= self.ended
+
+    def __shorten_name(self):
+
+        name = self.name
+
+        strip_phrases = [
+            'Portfolio Committee on',
+            'Standing Committee on',
+        ]
+
+        for phrase in strip_phrases:
+            name = re.sub('(?i)' + re.escape(phrase), '', name)
+
+        return name.strip()
+
+    def save(self, *args, **kwargs):
+        self.short_name = self.__shorten_name()
+        super(Organisation, self).save(*args, **kwargs)
 
 
 class PlaceKind(ModelBase):
@@ -820,7 +859,7 @@ class PlaceQuerySet(models.query.GeoQuerySet):
         return self.order_by('-kind__name', 'name')
 
 
-class Place(ModelBase, ScorecardMixin, BudgetsMixin, IdentifierMixin):
+class Place(ModelBase, HasImageMixin, ScorecardMixin, BudgetsMixin, IdentifierMixin):
     name = models.CharField(max_length=200)
     slug = models.SlugField(
         max_length=200,
@@ -841,6 +880,7 @@ class Place(ModelBase, ScorecardMixin, BudgetsMixin, IdentifierMixin):
     fields_to_whitespace_normalize = ['name']
 
     identifiers = GenericRelation(Identifier)
+    images = GenericRelation(Image)
 
     objects = PlaceQuerySet.as_manager()
     is_overall_scorecard_score_applicable = False
